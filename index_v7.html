@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>LotLifter Label Converter</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:#111;background:#f4f4f5}
+*{box-sizing:border-box}
+body{margin:0;padding:18px;background:#f4f4f5}
+.wrap{max-width:760px;margin:auto}
+h1{font-size:25px;margin:10px 0 5px}
+p{line-height:1.4;color:#555}
+.tabs{display:flex;gap:8px;margin:16px 0}
+.tab{flex:1;background:#e9e9ec;color:#111;border:0;border-radius:12px;padding:12px;font-weight:800;font-size:16px}
+.tab.active{background:#111;color:#fff}
+.card{background:#fff;border-radius:16px;padding:17px;margin:12px 0;box-shadow:0 1px 8px #0001}
+input[type=file]{display:block;width:100%;font-size:16px;margin:12px 0}
+button.primary{display:block;width:100%;padding:15px;border:0;border-radius:12px;background:#111;color:#fff;font-size:17px;font-weight:800;margin-top:10px}
+button.secondary{display:block;width:100%;padding:13px;border:0;border-radius:12px;background:#e9e9ec;color:#111;font-size:16px;font-weight:750;margin-top:10px}
+button:disabled{opacity:.35}
+.status{white-space:pre-line;line-height:1.45;margin-top:12px}
+.ok{color:#087d2c;font-weight:750}.bad{color:#a33}
+.small{font-size:13px;color:#666}
+.label{border:1px solid #bbb;border-radius:6px;display:flex;align-items:center;padding:4%;margin-top:12px;background:#fff;overflow:hidden}
+.label img.qr{width:auto;image-rendering:pixelated}
+.txt{margin-left:6%}.batchTitle{font-size:12px;font-weight:800}.batch{font-size:18px;font-weight:850}.item{font-size:26px;font-weight:900;margin-top:5px}
+.settingsGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field label{display:block;font-size:13px;color:#555;margin-bottom:5px}
+.field input,.field select{width:100%;font-size:16px;padding:11px;border:1px solid #ccc;border-radius:10px;background:#fff}
+.full{grid-column:1/-1}
+.note{padding:11px 12px;border-radius:10px;background:#f6f6f7;font-size:13px;line-height:1.4;color:#555}
+.switchRow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.switchRow input{width:22px;height:22px}
+.hidden{display:none}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <h1>LotLifter Label Converter</h1>
+  <p>Turn each LotLifter item into its own printable label while keeping the QR code, batch number, and item ID.</p>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="convert">Convert</button>
+    <button class="tab" data-tab="settings">Settings</button>
+  </div>
+
+  <section id="convertTab">
+    <div class="card">
+      <input id="file" type="file" accept=".pdf,application/pdf">
+      <button id="scan" class="primary" disabled>Read PDF</button>
+      <div id="status" class="status">Choose a PDF to begin.</div>
+    </div>
+
+    <div class="card" id="out" hidden>
+      <button id="make" class="primary">Create Label PDF</button>
+      <button id="test" class="secondary">Create 3-Label Test PDF</button>
+      <div id="preview"></div>
+    </div>
+  </section>
+
+  <section id="settingsTab" class="hidden">
+    <div class="card">
+      <strong>Label & Printer Settings</strong>
+      <p class="small">These settings are saved on this device.</p>
+
+      <div class="settingsGrid">
+        <div class="field">
+          <label>Label width (in)</label>
+          <input id="labelWidth" type="number" min="0.5" max="8.5" step="0.001">
+        </div>
+        <div class="field">
+          <label>Label height (in)</label>
+          <input id="labelHeight" type="number" min="0.5" max="11" step="0.001">
+        </div>
+        <div class="field">
+          <label>Gap between labels (in)</label>
+          <input id="labelGap" type="number" min="0" max="1" step="0.001">
+        </div>
+        <div class="field">
+          <label>QR size (in)</label>
+          <input id="qrSize" type="number" min="0.3" max="2" step="0.001">
+        </div>
+        <div class="field">
+          <label>QR left position (in)</label>
+          <input id="qrLeft" type="number" min="0" max="3" step="0.001">
+        </div>
+        <div class="field">
+          <label>QR down from top (in)</label>
+          <input id="qrTop" type="number" min="0" max="2" step="0.001">
+        </div>
+        <div class="field">
+          <label>Text left position (in)</label>
+          <input id="textLeft" type="number" min="0" max="5" step="0.001">
+        </div>
+        <div class="field">
+          <label>Print mode</label>
+          <select id="printMode">
+            <option value="label">Gap-sensing thermal / one PDF page per label</option>
+            <option value="pitch">Use label + gap as PDF page height</option>
+          </select>
+        </div>
+
+        <div class="full note">
+          <b>Gap-sensing thermal</b> is normally correct for printers that detect the space between labels.
+          If your printer consistently skips one physical label after every print, try <b>Use label + gap as PDF page height</b>.
+        </div>
+
+        <div class="field full switchRow">
+          <label for="showBatchWord" style="margin:0">Show the word “BATCH”</label>
+          <input id="showBatchWord" type="checkbox">
+        </div>
+      </div>
+
+      <button id="saveSettings" class="primary">Save Settings</button>
+      <button id="resetSettings" class="secondary">Reset to Your Current Roll</button>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const fileEl=$('file'), scan=$('scan'), status=$('status'), out=$('out'),
+      preview=$('preview'), make=$('make'), test=$('test');
+
+let labels=[], sourceName='labels';
+
+const defaults={
+  labelWidth:2.625,
+  labelHeight:1.000,
+  labelGap:0.125,
+  qrSize:0.722,
+  qrLeft:0.111,
+  // User requested the QR moved DOWN by 1/8 inch from the previous 0.139" position.
+  qrTop:0.264,
+  textLeft:0.972,
+  printMode:'label',
+  showBatchWord:true
+};
+
+function getSettings(){
+  const saved=JSON.parse(localStorage.getItem('lotlifterLabelSettings')||'{}');
+  return Object.assign({},defaults,saved);
+}
+function fillSettings(){
+  const s=getSettings();
+  ['labelWidth','labelHeight','labelGap','qrSize','qrLeft','qrTop','textLeft'].forEach(k=>$(k).value=s[k]);
+  $('printMode').value=s.printMode;
+  $('showBatchWord').checked=!!s.showBatchWord;
+}
+function readSettingsForm(){
+  return {
+    labelWidth:parseFloat($('labelWidth').value)||defaults.labelWidth,
+    labelHeight:parseFloat($('labelHeight').value)||defaults.labelHeight,
+    labelGap:parseFloat($('labelGap').value)||0,
+    qrSize:parseFloat($('qrSize').value)||defaults.qrSize,
+    qrLeft:parseFloat($('qrLeft').value)||0,
+    qrTop:parseFloat($('qrTop').value)||0,
+    textLeft:parseFloat($('textLeft').value)||defaults.textLeft,
+    printMode:$('printMode').value,
+    showBatchWord:$('showBatchWord').checked
+  };
+}
+function saveSettings(){
+  localStorage.setItem('lotlifterLabelSettings',JSON.stringify(readSettingsForm()));
+  fillSettings(); renderPreview();
+  alert('Settings saved.');
+}
+$('saveSettings').addEventListener('click',saveSettings);
+$('resetSettings').addEventListener('click',()=>{
+  localStorage.setItem('lotlifterLabelSettings',JSON.stringify(defaults));
+  fillSettings(); renderPreview();
+});
+
+document.querySelectorAll('.tab').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    $('convertTab').classList.toggle('hidden',btn.dataset.tab!=='convert');
+    $('settingsTab').classList.toggle('hidden',btn.dataset.tab!=='settings');
+  });
+});
+
+function msg(t,c=''){status.className='status '+c;status.textContent=t;}
+function librariesReady(){
+  if(!window.pdfjsLib){msg("PDF reader couldn't load. Refresh this page and try again.",'bad');return false;}
+  pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  return true;
+}
+
+fileEl.addEventListener('change',()=>{
+  const ok=fileEl.files&&fileEl.files.length>0;
+  scan.disabled=!ok;
+  msg(ok ? "Selected: "+fileEl.files[0].name+"\nTap Read PDF." : "Choose a PDF to begin.",ok?'ok':'');
+});
+
+scan.addEventListener('click',async()=>{
+  if(!fileEl.files||!fileEl.files.length||!librariesReady())return;
+  scan.disabled=true; labels=[]; preview.innerHTML=''; out.hidden=true;
+  const file=fileEl.files[0]; sourceName=file.name.replace(/\.pdf$/i,'');
+  try{
+    msg('Reading PDF…');
+    const data=new Uint8Array(await file.arrayBuffer());
+    const pdf=await pdfjsLib.getDocument({data}).promise;
+
+    for(let pn=1;pn<=pdf.numPages;pn++){
+      msg('Reading page '+pn+' of '+pdf.numPages+'…');
+      const page=await pdf.getPage(pn);
+      const base=page.getViewport({scale:1}), scale=4, vp=page.getViewport({scale});
+      const canv=document.createElement('canvas');
+      canv.width=Math.round(vp.width); canv.height=Math.round(vp.height);
+      const ctx=canv.getContext('2d',{alpha:false});
+      ctx.fillStyle='#fff';ctx.fillRect(0,0,canv.width,canv.height);
+      await page.render({canvasContext:ctx,viewport:vp}).promise;
+
+      const tc=await page.getTextContent();
+      const items=tc.items.filter(x=>x.str&&x.transform).map(x=>({
+        text:x.str.trim(),x:x.transform[4],y:base.height-x.transform[5]
+      }));
+
+      const ids=items.filter(x=>/^MM-\d+$/i.test(x.text)).sort((a,b)=>a.y-b.y);
+
+      let batches=items.map(x=>({
+        text:(x.text||'').replace(/[^0-9]/g,''),x:x.x,y:x.y
+      })).filter(x=>x.text.length===6).sort((a,b)=>a.y-b.y);
+
+      if(!batches.length){
+        const digitItems=items.map(x=>({
+          text:(x.text||'').replace(/[^0-9]/g,''),x:x.x,y:x.y
+        })).filter(x=>x.text.length>0&&x.text.length<=6).sort((a,b)=>(a.y-b.y)||(a.x-b.x));
+        for(let di=0;di<digitItems.length;di++){
+          const baseItem=digitItems[di]; let joined=baseItem.text,lastX=baseItem.x;
+          for(let dj=di+1;dj<digitItems.length&&joined.length<6;dj++){
+            const nxt=digitItems[dj];
+            if(Math.abs(nxt.y-baseItem.y)>3||nxt.x-lastX>35)break;
+            joined+=nxt.text;lastX=nxt.x;
+          }
+          if(joined.length===6)batches.push({text:joined,x:baseItem.x,y:baseItem.y});
+        }
+      }
+
+      ids.forEach(id=>{
+        let batch='';
+        if(batches.length){
+          const nearby=batches.filter(b=>Math.abs(b.y-id.y)<20);
+          const pool=nearby.length?nearby:batches;
+          batch=pool.reduce((best,b)=>Math.abs(b.y-id.y)<Math.abs(best.y-id.y)?b:best,pool[0]).text;
+        }
+
+        const qrCenterY=id.y,xPt=47,yPt=qrCenterY-36,sizePt=74;
+        const crop=document.createElement('canvas');
+        crop.width=Math.round(sizePt*scale);crop.height=Math.round(sizePt*scale);
+        const cc=crop.getContext('2d',{alpha:false});
+        cc.fillStyle='#fff';cc.fillRect(0,0,crop.width,crop.height);
+        cc.drawImage(canv,Math.round(xPt*scale),Math.round(yPt*scale),Math.round(sizePt*scale),Math.round(sizePt*scale),0,0,crop.width,crop.height);
+
+        labels.push({id:id.text,batch,qr:crop.toDataURL('image/png')});
+      });
+    }
+
+    if(!labels.length)throw new Error('No MM-#### IDs were detected.');
+    out.hidden=false; renderPreview();
+    const batch=[...new Set(labels.map(x=>x.batch).filter(Boolean))].join(', ')||'not detected';
+    msg('✓ '+labels.length+' labels found.\nBatch: '+batch+'\nFirst: '+labels[0].id+'   Last: '+labels[labels.length-1].id,'ok');
+  }catch(e){
+    console.error(e);msg('Could not read the PDF.\n'+(e.message||e),'bad');
+  }
+  scan.disabled=false;
+});
+
+function renderPreview(){
+  if(!labels.length)return;
+  const s=getSettings(), first=labels[0];
+  const ratio=s.labelWidth/s.labelHeight;
+  const qrPct=(s.qrSize/s.labelHeight)*100;
+  const topPct=(s.qrTop/s.labelHeight)*100;
+  const leftPct=(s.qrLeft/s.labelWidth)*100;
+  const textPct=(s.textLeft/s.labelWidth)*100;
+
+  preview.innerHTML=
+    '<div class="small">Preview of first label</div>'+
+    '<div class="label" style="aspect-ratio:'+ratio+';position:relative;padding:0">'+
+      '<img class="qr" src="'+first.qr+'" style="position:absolute;left:'+leftPct+'%;top:'+topPct+'%;height:'+qrPct+'%">'+
+      '<div class="txt" style="position:absolute;left:'+textPct+'%;top:18%;margin:0">'+
+        (s.showBatchWord?'<div class="batchTitle">BATCH</div>':'')+
+        '<div class="batch">'+first.batch+'</div>'+
+        '<div class="item">'+first.id+'</div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="small" style="margin-top:8px">Current output: '+s.labelWidth.toFixed(3)+'″ × '+s.labelHeight.toFixed(3)+'″'+
+    (s.printMode==='pitch'?' (page height includes '+s.labelGap.toFixed(3)+'″ gap compensation)':'')+'</div>';
+}
+
+function createPdf(limit){
+  if(!labels.length)return;
+  if(!window.jspdf){msg("PDF export library couldn't load. Refresh this page once and try again.",'bad');return}
+  try{
+    const s=getSettings();
+    const {jsPDF}=window.jspdf;
+    const pageW=s.labelWidth*72;
+    const pageH=(s.printMode==='pitch' ? (s.labelHeight+s.labelGap) : s.labelHeight)*72;
+    const labelH=s.labelHeight*72;
+    const qr=s.qrSize*72,left=s.qrLeft*72,top=s.qrTop*72,textX=s.textLeft*72;
+    const count=Math.min(limit||labels.length,labels.length);
+
+    msg('Building label PDF…');
+
+    const doc=new jsPDF({orientation:pageW>=pageH?'landscape':'portrait',unit:'pt',format:[pageH,pageW],compress:true});
+
+    for(let i=0;i<count;i++){
+      const l=labels[i];
+      if(i)doc.addPage([pageH,pageW],pageW>=pageH?'landscape':'portrait');
+
+      doc.addImage(l.qr,'PNG',left,top,qr,qr,undefined,'FAST');
+
+      doc.setTextColor(0,0,0); doc.setFont('helvetica','bold');
+      let y=18;
+      if(s.showBatchWord){doc.setFontSize(7);doc.text('BATCH',textX,y);y+=12;}
+      doc.setFontSize(10);doc.text(l.batch||'',textX,y);
+      doc.setFontSize(15);doc.text(l.id,textX,Math.min(labelH-10,y+21));
+    }
+
+    const suffix=limit?'_TEST_'+count+'_labels.pdf':'_labels.pdf';
+    doc.save(sourceName+'_'+s.labelWidth+'x'+s.labelHeight+suffix);
+    msg('✓ Finished '+count+' label'+(count===1?'':'s')+'.','ok');
+  }catch(e){
+    console.error(e);msg('Could not create the PDF.\n'+(e.message||e),'bad');
+  }
+}
+make.addEventListener('click',()=>createPdf());
+test.addEventListener('click',()=>createPdf(3));
+
+fillSettings();
+setTimeout(()=>{if(!window.pdfjsLib)msg("The PDF reader hasn't loaded yet. Refresh the page and try again.",'bad')},2500);
+})();
+</script>
+</body>
+</html>
